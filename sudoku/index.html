@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sudoku</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #faf9f7;
+  --ink: #1a1a1a;
+  --ink2: #888;
+  --line: #d0cec9;
+  --line2: #1a1a1a;
+  --focus: #eef3ff;
+  --blue: #2563eb;
+  --green: #16a34a;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --solved: #eff6ff;
+  --cell: clamp(38px, 9vw, 54px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  font-family: 'IBM Plex Sans', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  width: 100%;
+  max-width: 520px;
+}
+
+/* ── header ── */
+.header { text-align: center; }
+.header h1 {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.header p {
+  font-size: 0.72rem;
+  color: var(--ink2);
+  margin-top: 5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ── grid ── */
+.board-wrap {
+  position: relative;
+  display: inline-block;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(9, var(--cell));
+  grid-template-rows: repeat(9, var(--cell));
+  border: 2px solid var(--line2);
+  background: var(--line2);
+  gap: 0;
+  box-shadow: 0 2px 24px rgba(0,0,0,0.07);
+}
+
+.cell {
+  width: var(--cell);
+  height: var(--cell);
+  background: var(--bg);
+  border: 0.5px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+
+/* thick box borders */
+.cell:nth-child(3n+1):not(:nth-child(9n+1)) { border-left: 1.5px solid var(--line2); }
+.cell:nth-child(n+19):nth-child(-n+27),
+.cell:nth-child(n+46):nth-child(-n+54),
+.cell:nth-child(n+73):nth-child(-n+81) { border-bottom: 1.5px solid var(--line2); }
+
+.cell:focus-within { background: var(--focus); }
+.cell.err          { background: var(--red-bg); }
+.cell.hi           { background: #f0f4ff; }
+
+.cell input {
+  width: 100%; height: 100%;
+  background: transparent;
+  border: none; outline: none;
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: clamp(15px, 3.2vw, 22px);
+  font-weight: 400;
+  color: var(--ink);
+  cursor: pointer;
+  caret-color: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+.cell input.given  { font-weight: 600; color: var(--ink); }
+.cell input.pencil { color: var(--blue); font-size: clamp(11px, 2.4vw, 16px); }
+.cell input.filled { color: var(--blue); }
+.cell input.solved { color: var(--green); }
+.cell input.wrong  { color: var(--red); }
+
+/* ── numpad ── */
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+  width: calc(var(--cell) * 9);
+}
+.numpad button {
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: clamp(13px, 2.5vw, 17px);
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.numpad button:hover { background: var(--focus); border-color: var(--blue); }
+.numpad button.erase {
+  font-size: 14px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 400;
+  color: var(--ink2);
+}
+
+/* ── actions ── */
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: calc(var(--cell) * 9);
+}
+.actions button {
+  flex: 1;
+  min-width: 70px;
+  padding: 9px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: white;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.actions button:hover { border-color: var(--ink2); background: var(--bg); }
+.actions button.solve-btn {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+.actions button.solve-btn:hover { opacity: 0.82; }
+.actions button.solve-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── presets ── */
+.presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.presets span {
+  font-size: 11px;
+  color: var(--ink2);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+.presets button {
+  padding: 4px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.presets button:hover { color: var(--ink); border-color: var(--ink2); }
+
+/* ── status ── */
+.status {
+  font-size: 12px;
+  min-height: 18px;
+  color: var(--ink2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+}
+.status.ok  { color: var(--green); font-weight: 500; }
+.status.bad { color: var(--red); }
+.status.wait{ color: #b45309; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>Sudoku</h1>
+    <p>Java-powered solver</p>
+  </div>
+
+  <div class="board-wrap">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="numpad" id="numpad"></div>
+
+  <div class="actions">
+    <button class="solve-btn" id="solveBtn" onclick="solveWithJava()">Solve</button>
+    <button onclick="validateBoard()">Check</button>
+    <button onclick="giveHint()">Hint</button>
+    <button onclick="clearBoard()">Clear</button>
+  </div>
+
+  <div class="presets">
+    <span>Load</span>
+    <button onclick="loadExample(0)">Easy</button>
+    <button onclick="loadExample(1)">Medium</button>
+    <button onclick="loadExample(2)">Hard</button>
+  </div>
+
+  <div class="status" id="status">Select a preset or enter numbers</div>
+
+</div>
+<script>
+const API = 'http://localhost:8080/api/solve';
+
+const EXAMPLES = [
+  [5,3,0,0,7,0,0,0,0,6,0,0,1,9,5,0,0,0,0,9,8,0,0,0,0,6,0,8,0,0,0,6,0,0,0,3,4,0,0,8,0,3,0,0,1,7,0,0,0,2,0,0,0,6,0,6,0,0,0,0,2,8,0,0,0,0,4,1,9,0,0,5,0,0,0,0,8,0,0,7,9],
+  [0,0,0,2,6,0,7,0,1,6,8,0,0,7,0,0,9,0,1,9,0,0,0,4,5,0,0,8,2,0,1,0,0,0,4,0,0,0,4,6,0,2,9,0,0,0,5,0,0,0,3,0,2,8,0,0,9,3,0,0,0,7,4,0,4,0,0,5,0,0,3,6,7,0,3,0,1,8,0,0,0],
+  [0,0,0,6,0,0,4,0,0,7,0,0,0,0,3,6,0,0,0,0,0,0,9,1,0,8,0,0,0,0,0,0,0,0,0,0,0,5,0,1,8,0,0,0,3,0,0,0,3,0,6,0,4,5,0,4,0,2,0,0,0,6,0,9,0,3,0,0,0,0,0,5,0,0,7,0,0,9,0,0,0]
+];
+
+let board = Array(81).fill(0);
+let prefilled = Array(81).fill(false);
+let selected = -1;
+
+// ── build grid ───────────────────────────────────────────────
+function buildGrid() {
+  const g = document.getElementById('grid');
+  g.innerHTML = '';
+  for (let i = 0; i < 81; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.id = 'c' + i;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.inputMode = 'numeric'; inp.maxLength = 1;
+    inp.dataset.idx = i;
+    inp.addEventListener('focus', () => onFocus(i));
+    inp.addEventListener('input', onInput);
+    inp.addEventListener('keydown', onKey);
+    cell.appendChild(inp);
+    g.appendChild(cell);
+  }
+}
+
+// ── build numpad ─────────────────────────────────────────────
+function buildNumpad() {
+  const np = document.getElementById('numpad');
+  for (let n = 1; n <= 9; n++) {
+    const b = document.createElement('button');
+    b.textContent = n;
+    b.onclick = () => enterNum(n);
+    np.appendChild(b);
+  }
+  const er = document.createElement('button'); // placeholder spacer — replaced below
+  // actually put erase spanning... just add single erase btn after loop
+  // We have 9 buttons for 1-9. Numpad is 9 cols so row is full.
+  // Let's do a second row: clear-cell button centered
+}
+
+function onFocus(idx) {
+  selected = idx;
+  highlightRelated(idx);
+}
+
+function highlightRelated(idx) {
+  document.querySelectorAll('.cell').forEach(c => c.classList.remove('hi'));
+  if (idx < 0) return;
+  const row = Math.floor(idx / 9), col = idx % 9;
+  const br = Math.floor(row/3)*3, bc = Math.floor(col/3)*3;
+  for (let i = 0; i < 81; i++) {
+    const r = Math.floor(i/9), c = i%9;
+    if (r === row || c === col || (r >= br && r < br+3 && c >= bc && c < bc+3))
+      document.getElementById('c'+i).classList.add('hi');
+  }
+  document.getElementById('c'+idx).classList.remove('hi');
+}
+
+function enterNum(n) {
+  if (selected < 0 || prefilled[selected]) return;
+  board[selected] = n;
+  const inp = document.querySelector(`[data-idx="${selected}"]`);
+  inp.value = n;
+  inp.className = 'filled';
+  clearCellErrors();
+  setStatus('');
+}
+
+function onInput(e) {
+  const idx = +e.target.dataset.idx;
+  if (prefilled[idx]) { e.target.value = board[idx] || ''; return; }
+  const v = e.target.value.replace(/[^1-9]/g, '');
+  e.target.value = v;
+  board[idx] = v ? +v : 0;
+  e.target.className = v ? 'filled' : '';
+  clearCellErrors(); setStatus('');
+}
+
+function onKey(e) {
+  const idx = +e.target.dataset.idx;
+  const dirs = { ArrowRight:1, ArrowLeft:-1, ArrowDown:9, ArrowUp:-9 };
+  if (dirs[e.key] !== undefined) {
+    e.preventDefault();
+    const ni = idx + dirs[e.key];
+    if (ni >= 0 && ni < 81) document.querySelector(`[data-idx="${ni}"]`).focus();
+  }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && !prefilled[idx]) {
+    board[idx] = 0; e.target.value = ''; e.target.className = '';
+  }
+}
+
+// ── load / clear ─────────────────────────────────────────────
+function loadExample(n) {
+  board = [...EXAMPLES[n]];
+  prefilled = board.map(v => v !== 0);
+  selected = -1;
+  document.querySelectorAll('.cell').forEach(c => c.classList.remove('hi','err'));
+  for (let i = 0; i < 81; i++) {
+    const inp = document.querySelector(`[data-idx="${i}"]`);
+    inp.value = board[i] || '';
+    inp.readOnly = prefilled[i];
+    inp.className = prefilled[i] ? 'given' : '';
+  }
+  setStatus('Ready to solve');
+}
+
+function clearBoard() {
+  board = Array(81).fill(0);
+  prefilled = Array(81).fill(false);
+  selected = -1;
+  document.querySelectorAll('.cell').forEach(c => { c.className = 'cell'; });
+  document.querySelectorAll('.cell input').forEach(inp => {
+    inp.value = ''; inp.className = ''; inp.readOnly = false;
+  });
+  setStatus('Board cleared');
+}
+
+function clearCellErrors() {
+  document.querySelectorAll('.cell.err').forEach(c => c.classList.remove('err'));
+  document.querySelectorAll('input.wrong').forEach(i => {
+    i.className = prefilled[+i.dataset.idx] ? 'given' : (board[+i.dataset.idx] ? 'filled' : '');
+  });
+}
+
+// ── Java backend solve ────────────────────────────────────────
+async function solveWithJava() {
+  const btn = document.getElementById('solveBtn');
+  clearCellErrors();
+  setStatus('Sending to Java...', 'wait');
+  btn.disabled = true;
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) {
+      setStatus('No solution exists', 'bad');
+    } else {
+      board = data.board;
+      for (let i = 0; i < 81; i++) {
+        const inp = document.querySelector(`[data-idx="${i}"]`);
+        inp.value = data.board[i];
+        if (!prefilled[i]) inp.className = 'solved';
+      }
+      setStatus('Solved by Java', 'ok');
+    }
+  } catch (err) {
+    setStatus('Backend unreachable — is Spring Boot running?', 'bad');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── client-side check ─────────────────────────────────────────
+function isSafe(b, row, col, num) {
+  for (let i = 0; i < 9; i++)
+    if (b[row*9+i] === num || b[i*9+col] === num) return false;
+  const sr = Math.floor(row/3)*3, sc = Math.floor(col/3)*3;
+  for (let i = sr; i < sr+3; i++)
+    for (let j = sc; j < sc+3; j++)
+      if (b[i*9+j] === num) return false;
+  return true;
+}
+
+function validateBoard() {
+  clearCellErrors();
+  let ok = true;
+  for (let i = 0; i < 81; i++) {
+    if (!board[i]) continue;
+    const row = Math.floor(i/9), col = i%9, tmp = board[i];
+    board[i] = 0;
+    if (!isSafe(board, row, col, tmp)) {
+      document.getElementById('c'+i).classList.add('err');
+      document.querySelector(`[data-idx="${i}"]`).classList.add('wrong');
+      ok = false;
+    }
+    board[i] = tmp;
+  }
+  setStatus(ok ? 'No conflicts found' : 'Conflicts highlighted', ok ? 'ok' : 'bad');
+}
+
+function solveSudoku(b) {
+  for (let i = 0; i < 81; i++) {
+    if (b[i] === 0) {
+      const row = Math.floor(i/9), col = i%9;
+      for (let n = 1; n <= 9; n++) {
+        if (isSafe(b, row, col, n)) {
+          b[i] = n;
+          if (solveSudoku(b)) return true;
+          b[i] = 0;
+        }
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+function giveHint() {
+  const b = [...board];
+  if (!solveSudoku(b)) { setStatus('No solution exists', 'bad'); return; }
+  const empties = [];
+  for (let i = 0; i < 81; i++) if (!board[i]) empties.push(i);
+  if (!empties.length) { setStatus('Board already complete', 'ok'); return; }
+  const idx = empties[Math.floor(Math.random() * empties.length)];
+  board[idx] = b[idx];
+  const inp = document.querySelector(`[data-idx="${idx}"]`);
+  inp.value = b[idx]; inp.className = 'solved';
+  setStatus('Hint placed', 'ok');
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (type ? ' ' + type : '');
+}
+
+buildGrid();
+buildNumpad();
+loadExample(0);
+</script>
+</body>
+</html>
